@@ -3,6 +3,8 @@ package com.byteclub.meetyourfriend.voice
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -21,17 +23,23 @@ class SpeechCapture(
 
     private var recognizer: SpeechRecognizer? = null
     private var failures = 0
+    private var sessionActive = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val watchdog = Runnable { onWatchdogTimeout() }
 
     fun start() {
+        if (sessionActive) stop()
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            listener.onListeningChanged(false)
             listener.onFailure("Speech recognition is unavailable", true)
             return
         }
         val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
         recognizer = speechRecognizer
+        sessionActive = true
         speechRecognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                listener.onListeningChanged(true)
+                if (sessionActive) listener.onListeningChanged(true)
             }
 
             override fun onBeginningOfSpeech() = Unit
@@ -39,37 +47,35 @@ class SpeechCapture(
             override fun onBufferReceived(buffer: ByteArray?) = Unit
 
             override fun onEndOfSpeech() {
-                listener.onListeningChanged(false)
+                if (sessionActive) listener.onListeningChanged(false)
             }
 
             override fun onError(error: Int) {
-                listener.onListeningChanged(false)
-                if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_CLIENT) {
-                    failures++
-                }
-                val fallback = failures >= 2
-                listener.onFailure(
-                    if (error == SpeechRecognizer.ERROR_NO_MATCH) "Didn't catch that — tap to retry"
-                    else "Speech recognition failed",
-                    fallback,
-                )
-                if (fallback) stop()
+                if (!sessionActive) return
+                cancelWatchdog()
+                val outcome = failureOutcome(error, failures)
+                if (outcome.countsAsFailure) failures++
+                stop()
+                listener.onFailure(outcome.message, outcome.showFallback)
             }
 
             override fun onResults(results: Bundle?) {
-                listener.onListeningChanged(false)
+                if (!sessionActive) return
+                cancelWatchdog()
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull().orEmpty()
+                stop()
                 if (text.isNotBlank()) {
                     failures = 0
                     listener.onTranscript(text)
                 }
-                stop()
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.let(listener::onPartial)
+                if (sessionActive) {
+                    partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()?.let(listener::onPartial)
+                }
             }
 
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -80,18 +86,41 @@ class SpeechCapture(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
-        speechRecognizer.startListening(intent)
+        mainHandler.postDelayed(watchdog, WATCHDOG_TIMEOUT_MS)
         listener.onListeningChanged(true)
+        speechRecognizer.startListening(intent)
     }
 
     fun stop() {
-        recognizer?.let {
-            runCatching { it.stopListening() }
-            it.destroy()
-        }
+        cancelWatchdog()
+        sessionActive = false
+        val activeRecognizer = recognizer
         recognizer = null
-        listener.onListeningChanged(false)
+        try {
+            activeRecognizer?.let {
+                runCatching { it.stopListening() }
+                runCatching { it.destroy() }
+            }
+        } finally {
+            listener.onListeningChanged(false)
+        }
     }
 
     fun destroy() = stop()
+
+    private fun onWatchdogTimeout() {
+        if (!sessionActive) return
+        val outcome = failureOutcome(null, failures)
+        if (outcome.countsAsFailure) failures++
+        stop()
+        listener.onFailure(outcome.message, outcome.showFallback)
+    }
+
+    private fun cancelWatchdog() {
+        mainHandler.removeCallbacks(watchdog)
+    }
+
+    private companion object {
+        const val WATCHDOG_TIMEOUT_MS = 12_000L
+    }
 }
