@@ -1,0 +1,5 @@
+<paths>
+    <cache-path name="shared_cache" path="." />
+    <files-path name="voice_notes" path="voice/" />
+    <files-path name="selfies" path="selfies/" />
+</paths>
