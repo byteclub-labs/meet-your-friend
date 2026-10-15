@@ -46,7 +46,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -181,7 +183,9 @@ fun MeetScreen(
                 AsyncImage(
                     model = File(state.selfiePath!!),
                     contentDescription = "Selfie",
-                    modifier = Modifier.padding(top = 12.dp).size(88.dp).background(Color.LightGray, CircleShape),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.padding(top = 12.dp).size(88.dp).clip(CircleShape)
+                        .background(Color.LightGray),
                 )
             }
 
@@ -207,22 +211,30 @@ fun MeetScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
-                        runCatching {
-                            LinkedInLauncher.open(context, state.name, state.organization)
-                        }.onFailure { viewModel.setStatus("Could not open LinkedIn search") }
+                        if (state.name.isBlank()) {
+                            viewModel.setStatus("Add a name first")
+                        } else {
+                            runCatching {
+                                LinkedInLauncher.open(context, state.name, state.organization)
+                            }.onFailure { viewModel.setStatus("Could not open LinkedIn search") }
+                        }
                     },
                     modifier = Modifier.weight(1f),
                 ) { Text("Find on LinkedIn") }
                 OutlinedButton(
                     onClick = {
-                        val message = state.settings.whatsappTemplate
-                            .replace("{name}", state.name)
-                            .replace("{organization}", state.organization)
-                            .replace("{role}", state.role)
-                            .replace("{myName}", state.settings.myName)
-                        runCatching { WhatsAppLauncher.launch(context, state.mobile, message) }
-                            .onSuccess { viewModel.markWhatsAppSent() }
-                            .onFailure { viewModel.setStatus("Could not open WhatsApp or SMS") }
+                        if (state.mobile.isBlank() || state.mobileError) {
+                            viewModel.setStatus("Add a valid mobile first")
+                        } else {
+                            val message = state.settings.whatsappTemplate
+                                .replace("{name}", state.name)
+                                .replace("{organization}", state.organization)
+                                .replace("{role}", state.role)
+                                .replace("{myName}", state.settings.myName)
+                            runCatching { WhatsAppLauncher.launch(context, state.mobile, message) }
+                                .onSuccess { viewModel.markWhatsAppSent() }
+                                .onFailure { viewModel.setStatus("Could not open WhatsApp or SMS") }
+                        }
                     },
                     modifier = Modifier.weight(1f),
                 ) { Text("WhatsApp ✉") }

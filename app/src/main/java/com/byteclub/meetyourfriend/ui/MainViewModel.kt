@@ -20,6 +20,7 @@ import com.byteclub.meetyourfriend.voice.PhoneNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class DuplicatePrompt(val existing: Connect, val pending: Connect)
 
@@ -66,6 +70,7 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(MeetUiState(apiKeySet = keyStore.hasKey()))
     val state: StateFlow<MeetUiState> = _state.asStateFlow()
+    private val saveMutex = Mutex()
     private var saveJob: Job? = null
     private var mobileValidationJob: Job? = null
 
@@ -316,7 +321,9 @@ class MainViewModel @Inject constructor(
         if (snapshot.name.isBlank() || snapshot.mobile.isBlank()) return
         saveJob = viewModelScope.launch {
             delay(500)
-            save(snapshot)
+            saveMutex.withLock {
+                save(_state.value)
+            }
         }
     }
 
@@ -333,14 +340,15 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private suspend fun save(snapshot: MeetUiState) {
+    private suspend fun save(snapshot: MeetUiState) = withContext(NonCancellable) {
+        if (snapshot.name.isBlank() || snapshot.mobile.isBlank()) return@withContext
         val region = settingsRepository.resolvedRegion()
         val mobile = PhoneNormalizer(region).normalize(snapshot.mobile)
         if (mobile == null) {
             _state.value = _state.value.copy(mobileError = true, status = "Not a valid number")
-            return
+            return@withContext
         }
-        val existingId = snapshot.selectedId
+        val existingId = _state.value.selectedId
         if (existingId == null) {
             val duplicate = dao.findByMobile(mobile)
             if (duplicate != null) {
@@ -349,7 +357,7 @@ class MainViewModel @Inject constructor(
                     duplicate = DuplicatePrompt(duplicate, pending),
                     status = "This number is already saved",
                 )
-                return
+                return@withContext
             }
         }
         val existing = existingId?.let { dao.getById(it) }
