@@ -38,6 +38,11 @@ fun SettingsSheet(
 ) {
     var keyInput by remember { mutableStateOf("") }
     var testResult by remember { mutableStateOf<String?>(null) }
+    var myName by remember { mutableStateOf(settings.myName) }
+    var whatsappTemplate by remember { mutableStateOf(settings.whatsappTemplate) }
+    var defaultCountryCode by remember { mutableStateOf(settings.defaultCountryCode) }
+    var extractionModel by remember { mutableStateOf(settings.extractionModel) }
+    var briefModel by remember { mutableStateOf(settings.briefModel) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
@@ -45,24 +50,32 @@ fun SettingsSheet(
         ) {
             Text("Settings", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
             OutlinedTextField(
-                value = settings.myName,
-                onValueChange = { value -> onSettingsChanged { it.copy(myName = value) } },
+                value = myName,
+                onValueChange = { value ->
+                    myName = value
+                    onSettingsChanged { it.copy(myName = value) }
+                },
                 label = { Text("My name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = settings.whatsappTemplate,
-                onValueChange = { value -> onSettingsChanged { it.copy(whatsappTemplate = value) } },
+                value = whatsappTemplate,
+                onValueChange = { value ->
+                    whatsappTemplate = value
+                    onSettingsChanged { it.copy(whatsappTemplate = value) }
+                },
                 label = { Text("WhatsApp message template") },
                 supportingText = { Text("Placeholders: {name}, {organization}, {role}, {myName}") },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 2,
             )
             OutlinedTextField(
-                value = settings.defaultCountryCode,
+                value = defaultCountryCode,
                 onValueChange = { value ->
-                    onSettingsChanged { it.copy(defaultCountryCode = value.uppercase().take(2)) }
+                    val countryCode = value.uppercase().take(2)
+                    defaultCountryCode = countryCode
+                    onSettingsChanged { it.copy(defaultCountryCode = countryCode) }
                 },
                 label = { Text("Default country code (ISO, e.g. AE)") },
                 modifier = Modifier.fillMaxWidth(),
@@ -99,15 +112,21 @@ fun SettingsSheet(
             }
             testResult?.let { Text(it) }
             OutlinedTextField(
-                value = settings.extractionModel,
-                onValueChange = { value -> onSettingsChanged { it.copy(extractionModel = value) } },
+                value = extractionModel,
+                onValueChange = { value ->
+                    extractionModel = value
+                    onSettingsChanged { it.copy(extractionModel = value) }
+                },
                 label = { Text("Extraction model") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = settings.briefModel,
-                onValueChange = { value -> onSettingsChanged { it.copy(briefModel = value) } },
+                value = briefModel,
+                onValueChange = { value ->
+                    briefModel = value
+                    onSettingsChanged { it.copy(briefModel = value) }
+                },
                 label = { Text("Brief model") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,

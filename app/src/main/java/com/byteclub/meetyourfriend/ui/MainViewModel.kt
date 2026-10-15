@@ -33,6 +33,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+private const val DEFAULT_STATUS = "Tap to speak · double-tap for a selfie"
+private const val INVALID_MOBILE_STATUS = "Not a valid number"
+
 data class DuplicatePrompt(val existing: Connect, val pending: Connect)
 
 data class MeetUiState(
@@ -49,7 +52,7 @@ data class MeetUiState(
     val selfiePath: String? = null,
     val transcript: String = "",
     val partialTranscript: String = "",
-    val status: String = "Tap to speak · double-tap for a selfie",
+    val status: String = DEFAULT_STATUS,
     val listening: Boolean = false,
     val settings: com.byteclub.meetyourfriend.data.AppSettings =
         com.byteclub.meetyourfriend.data.AppSettings(),
@@ -95,11 +98,16 @@ class MainViewModel @Inject constructor(
     }
 
     fun updateField(field: FormField, value: String) {
+        val current = _state.value
         val updated = when (field) {
-            FormField.NAME -> _state.value.copy(name = value)
-            FormField.ORGANIZATION -> _state.value.copy(organization = value)
-            FormField.ROLE -> _state.value.copy(role = value)
-            FormField.MOBILE -> _state.value.copy(mobile = value, mobileError = false)
+            FormField.NAME -> current.copy(name = value)
+            FormField.ORGANIZATION -> current.copy(organization = value)
+            FormField.ROLE -> current.copy(role = value)
+            FormField.MOBILE -> current.copy(
+                mobile = value,
+                mobileError = false,
+                status = if (current.status == INVALID_MOBILE_STATUS) DEFAULT_STATUS else current.status,
+            )
         }
         _state.value = updated
         if (field == FormField.MOBILE) validateMobile(value)
@@ -334,8 +342,16 @@ class MainViewModel @Inject constructor(
             delay(350)
             val region = settingsRepository.resolvedRegion()
             val valid = PhoneNormalizer(region).normalize(value) != null
-            if (_state.value.mobile == value) {
-                _state.value = _state.value.copy(mobileError = !valid)
+            val current = _state.value
+            if (current.mobile == value) {
+                _state.value = current.copy(
+                    mobileError = !valid,
+                    status = if (valid && current.status == INVALID_MOBILE_STATUS) {
+                        DEFAULT_STATUS
+                    } else {
+                        current.status
+                    },
+                )
             }
         }
     }
@@ -345,7 +361,7 @@ class MainViewModel @Inject constructor(
         val region = settingsRepository.resolvedRegion()
         val mobile = PhoneNormalizer(region).normalize(snapshot.mobile)
         if (mobile == null) {
-            _state.value = _state.value.copy(mobileError = true, status = "Not a valid number")
+            _state.value = _state.value.copy(mobileError = true, status = INVALID_MOBILE_STATUS)
             return@withContext
         }
         val existingId = _state.value.selectedId
