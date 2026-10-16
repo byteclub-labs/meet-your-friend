@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {"text": "A useful "},
+          {"text": "follow-up brief.\nCONFIDENCE: HIGH"}
+        ]
+      },
+      "groundingMetadata": {
+        "groundingChunks": [
+          {
+            "web": {
+              "title": "Example",
+              "uri": "https://example.com/person"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

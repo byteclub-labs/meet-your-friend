@@ -1,0 +1,13 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "{\"name\":\"Test User\",\"organization\":\"Example Inc\",\"role\":null,\"mobile\":\"+12025550123\"}"
+          }
+        ]
+      }
+    }
+  ]
+}
